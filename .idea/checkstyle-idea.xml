@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="CheckStyle-IDEA" serialisationVersion="2">
+    <checkstyleVersion>10.21.1</checkstyleVersion>
+    <scanScope>JavaOnly</scanScope>
+    <option name="thirdPartyClasspath" />
+    <option name="activeLocationIds">
+      <option value="3e4dc097-483e-43c6-b9f5-77357964b911" />
+    </option>
+    <option name="locations">
+      <list>
+        <ConfigurationLocation id="bundled-sun-checks" type="BUNDLED" scope="All" description="Sun Checks">(bundled)</ConfigurationLocation>
+        <ConfigurationLocation id="bundled-google-checks" type="BUNDLED" scope="All" description="Google Checks">(bundled)</ConfigurationLocation>
+        <ConfigurationLocation id="3e4dc097-483e-43c6-b9f5-77357964b911" type="LOCAL_FILE" scope="All" description="Northeastern-Align-Checkstyle">$USER_HOME$/helia_world/Courses/neu/bridge/neu-cs5004/Lab 0 Align Checkstyle.xml</ConfigurationLocation>
+      </list>
+    </option>
+  </component>
+</project>
