@@ -2,6 +2,7 @@ package gitlet;
 
 import java.io.File;
 import java.util.HashMap;
+import java.util.HashSet;
 
 import static gitlet.Utils.*;
 
@@ -270,5 +271,137 @@ public class Repository {
         }
 
         branchFile.delete();
+    }
+
+    /**
+     *找到当前分支 (`HEAD`) 和要合并的分支 (`branchName`)
+     * 2. 找到这两个分支的 **"最近公共祖先" (Lowest Common Ancestor, LCA)
+     * 3. 决定如何合并文件
+     *     - 如果 `HEAD` 和 `branch` 里文件都没变，跳过
+     *     - 如果 `branch` 里有新文件，复制过来
+     *     - 如果 `HEAD` 里有新文件，而 `branch` 里没有，保留
+     *     - 如果 `HEAD` 和 `branch` 都改了同一个文件，产生冲突！
+     * 4. 创建新的 `commit`，它的 `parent` 有两个
+     *     - `HEAD` 分支的 `commit`
+     *     - `branch` 分支的 `commit`
+     * 5. 更新 `HEAD`，让当前分支指向新的 `commit
+     *
+     * @param branchName
+     */
+    public static void merge(String branchName) {
+        // 获取当前的branch和要合并的branch并且check.
+        String currentBranch = Utils.readContentsAsString(HEAD);
+        File branchFile = Utils.join(REPO_DIR, branchName);
+        if (!branchFile.exists()) {
+            System.out.println("A branch with that name does not exist.");
+            return;
+        }
+
+        // 读取分支的最新commitId.
+        // ❓为啥两个不一样? -> 💡 这个问题的本质是：HEAD 里存的是“当前分支的路径”，而不是 commit ID！
+        String branchCommitId = Utils.readContentsAsString(branchFile);
+        String currentCommitId = Utils.readContentsAsString(Utils.join(REPO_DIR, currentBranch));
+
+        // 找两个branch的公共祖先.
+        String lcaCommitId = findLowestCommonAncestor(currentCommitId, branchCommitId);
+
+        // 遍历文件, 处理merge逻辑.
+        handleMergeConflicts(lcaCommitId, currentCommitId, branchCommitId);
+
+        // 创建新的merge commit.
+        // 📌 在 Git 里，普通 commit 只有一个 parent
+        // 📌 而 merge commit 有两个 parent
+        Commit mergeCommit = new Commit("Merged" + branchName + " into "
+                + currentBranch, currentCommitId, branchCommitId);
+        String mergeCommitId = mergeCommit.getId();
+        File commitFile = Utils.join(OBJECTS_DIR, mergeCommitId);
+        Utils.writeObject(commitFile, mergeCommit);
+
+        // 更新当前分支
+        File currentBranchFile = Utils.join(REPO_DIR, currentBranch);
+        Utils.writeContents(currentBranchFile, mergeCommitId);
+    }
+
+    /**
+     ***从 `commitA` 开始，把所有祖先存进 `HashSet`**
+     *  **从 `commitB` 逆向遍历，一旦遇到相同的 commit，就返回 LCA**
+     * **如果 `commitB` 里所有的祖先都不在 `commitA` 里，说明有问题**
+     * @param commitA
+     * @param commitB
+     * @return 最早共同祖先那个commit(String).
+     */
+    private static String findLowestCommonAncestor(String commitA, String commitB) {
+        // 把A 的祖先全部存进set.
+        HashSet<String> visited = new HashSet<String>();
+        while (commitA != null) {
+            visited.add(commitA);
+            commitA = Utils.readObject(Utils.join(OBJECTS_DIR, commitA),
+                    Commit.class).getParent();
+        }
+        while (commitB != null) {
+            if (visited.contains(commitB)) {
+                return commitB;
+            }
+            commitB = Utils.readObject(Utils.join(OBJECTS_DIR, commitB),
+                    Commit.class).getParent();
+        }
+        return null;
+    }
+
+    /**
+     *
+     - **如果 `HEAD` 里有文件，但 `branch` 里被删除 → 删除**
+     - **如果 `branch` 里有新文件 → 添加**
+     - **如果 `HEAD` 和 `branch` 里都修改了同一个文件 → 发生冲突**
+     - **在文件里写入 `<<<<<<< HEAD` 和 `>>>>>>>` 标记**
+
+     📌 **示例** **如果 `hello.txt` 发生冲突**
+
+     ```txt
+     <<<<<<< HEAD
+     旧的内容
+     =======
+     新的内容
+     >>>>>>>
+     ```
+
+     * @param lcaCommitId
+     * @param commitA
+     * @param commitB
+     */
+    private static void handleMergeConflicts(String lcaCommitId, String commitA, String commitB) {
+        //获取 commit
+        Commit lcaCommit = Utils.readObject(Utils.join(OBJECTS_DIR, lcaCommitId), Commit.class);
+        Commit commit1 = Utils.readObject(Utils.join(OBJECTS_DIR, commitA), Commit.class);
+        Commit commit2 = Utils.readObject(Utils.join(OBJECTS_DIR, commitB), Commit.class);
+
+        // 获取文件 blobs
+        HashMap<String, String> lcaBlobs = lcaCommit.getBlobs();
+        HashMap<String, String> commit1Blobs = commit1.getBlobs();
+        HashMap<String, String> commit2Blobs = commit2.getBlobs();
+
+        for (String file : commit1Blobs.keySet()) { // 遍历 commit1Blobs（当前分支 HEAD 的文件列表）
+
+            if (!commit2Blobs.containsKey(file)) { // 检查这些文件在 commit2Blobs（要合并的 branch）里的状态
+
+                Utils.restrictedDelete(file); // 如果 branch 里没有这个文件，说明 branch 删除了这个文件，需要 delete
+            }else if (!commit1Blobs.get(file).equals(commit2Blobs.get(file))) { // 如果 HEAD 和 branch 里都修改了这个文件，发生 merge conflict，需要标记冲突
+
+                File conflictFile = new File(file);
+                String conflictContent = "<<<<<<< HEAD\n"
+                        + Utils.readContentsAsString(conflictFile)
+                        + "=======\n"
+                        + Utils.readContentsAsString(Utils.join(OBJECTS_DIR, commit2Blobs.get(file)))
+                        + ">>>>>>>\n";
+                Utils.writeContents(conflictFile, conflictContent);
+            }
+        }
+
+        for (String file : commit2Blobs.keySet()) {
+            if (!commit1Blobs.containsKey(file)) {
+                File newFile = new File(file);
+                Utils.writeContents(newFile, Utils.readContentsAsString(Utils.join(OBJECTS_DIR, commit2Blobs.get(file))));
+            }
+        }
     }
 }

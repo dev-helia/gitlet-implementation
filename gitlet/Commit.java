@@ -25,6 +25,7 @@ public class Commit implements Serializable {
 
     // Commit structure.
     private String parent; // ✅Parent ID.
+    private String parent2; // 第二个 parent（如果是 merge）
     private HashMap<String, String> blobs;// Blob.(和文件的映射关系)
 
     /* TODO: fill in the rest of this class. */
@@ -35,10 +36,11 @@ public class Commit implements Serializable {
      * @param message The message(description) of this commitment.
      * @param parent The parent commitment.
      */
-    public Commit(String message, String parent) {
+    public Commit(String message, String parent, String parent2) {
         // Handle the paras传入参数.
         this.message = message;
         this.parent = parent;
+        this.parent2 = parent2;
         // 初始化.
         this.timestamp = (parent == null)
                 ?new Date(0)//✅new Date(0)：创建一个 时间戳 = 1970-01-01 00:00:00 UTC 的时间对象
@@ -46,6 +48,10 @@ public class Commit implements Serializable {
                 :new Date(); //✅如果 parent 不是空（说明这个 commit 继承自某个 commit）
         //new Date()：使用当前系统时间，创建一个新的时间戳（即提交时的实际时间）
         this.blobs = new HashMap<String, String>();
+    }
+
+    public Commit(String message, String parent) {
+        this(message, parent, null);
     }
 
     /**
